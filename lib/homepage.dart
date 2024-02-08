@@ -3,8 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:charts_flutter/flutter.dart' as charts;
+import 'package:cr_flutter_libserialport/cr_flutter_libserialport.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_libserialport/flutter_libserialport.dart';
+//import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:tektest_2/layout/textfiled.dart';
 import 'package:tektest_2/layout/widgets.dart';
@@ -60,17 +61,19 @@ class _HomePageState extends State<HomePage> {
     if (selectedPort != 'NONE' && !isPortConnected) {
       try {
         SerialPortConfig config = SerialPortConfig();
-        config.baudRate = 9600;
-        config.bits = 8;
-        config.parity = SerialPortParity.none;
-        config.stopBits = 1;
-        config.setFlowControl(SerialPortFlowControl.none);
 
         // Kontrol etmek için bu noktada config.baudRate değerini yazdırın
         print("Baud Rate Before Opening: ${config.baudRate}");
 
         serialPort = SerialPort(selectedPort);
         serialPort.openReadWrite();
+        config.baudRate = 9600;
+        config.bits = 8;
+        config.parity = SerialPortParity.none;
+        config.stopBits = 1;
+        //config.setFlowControl(SerialPortFlowControl.none);
+
+        serialPort.config = config;
 
         print("Default BAutRat ${config.baudRate}");
         print("Default Bits ${config.bits}");
@@ -80,7 +83,6 @@ class _HomePageState extends State<HomePage> {
         isPortConnected = true;
         //_updatePumpButton();
         print(selectedPort);
-        _startTimer();
       } catch (error) {
         print("Fehler beim Verbinden mit dem Port: $error");
         _disconnect();
@@ -97,8 +99,10 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _startTimer() {
-    if (isPortConnected) {
-      Timer.periodic(const Duration(seconds: 1), (timer) {
+    Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!isPortConnected) {
+        timer.cancel();
+      } else {
         var read = serialPort.read(1);
 
         print(read);
@@ -116,8 +120,8 @@ class _HomePageState extends State<HomePage> {
             lineChart = SimpleLineChart.withSampleData(chartValues);
           });
         }
-      });
-    }
+      }
+    });
   }
 
   void _sendCommand(String command) {
@@ -138,8 +142,6 @@ class _HomePageState extends State<HomePage> {
   bool isPrimeOn = false;
   _primen() {
     _sendCommand(!isPumpOn && !isPrimeOn ? "a" : 'p');
-
-    _startTimer();
   }
 
   Future<void> setFlowRate() async {
@@ -243,6 +245,7 @@ class _HomePageState extends State<HomePage> {
                                       setState(() {
                                         selectedPort = newValue!;
                                         _initializePorts();
+                                        _startTimer();
                                       });
                                     },
                                     style: const TextStyle(
@@ -421,12 +424,16 @@ class SimpleLineChart extends StatelessWidget {
   final List<charts.Series<LinearFlowrate, int>> seriesList;
   final bool animate;
   final String Function(int)? getTitle;
+  @override
+  final Key? key;
 
   void addDataPoint(LinearFlowrate dataPoint) {
     seriesList[0].data.add(dataPoint);
   }
 
-  SimpleLineChart(this.seriesList, {required this.animate, this.getTitle});
+  const SimpleLineChart(this.seriesList,
+      {required this.animate, this.getTitle, this.key})
+      : super(key: key);
 
   factory SimpleLineChart.withSampleData(List<LinearFlowrate> data,
       {String Function(int)? getTitle}) {
