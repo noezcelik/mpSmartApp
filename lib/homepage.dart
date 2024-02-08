@@ -28,12 +28,15 @@ class _HomePageState extends State<HomePage> {
   late ElevatedButton pumpButton;
   SerialPort serialPort = SerialPort('');
 
+  static const maxDataPoints = 7;
+
   //final SerialPort _serialPort = SerialPort("/dev/ttyUSB0");
   final TextEditingController _sensorFlowRateController =
       TextEditingController();
 
   late SimpleLineChart lineChart;
-  final port = SerialPort('COM5');
+  //late Timer chartResetTimer;
+  //final port = SerialPort('COM5');
 
   @override
   void initState() {
@@ -41,16 +44,34 @@ class _HomePageState extends State<HomePage> {
     _initializePorts();
 
     lineChart = SimpleLineChart.withSampleData(chartValues);
+    // Timer'ı başlat
+    // chartResetTimer = Timer.periodic(const Duration(seconds: 21), (timer) {
+    //   setState(() {
+    //     // Grafik verilerini sıfırla
+    //     chartValues.clear();
+    //     // Yeniden çiz
+    //     lineChart = SimpleLineChart.withSampleData(chartValues);
+    //   });
+    // });
   }
+
+  // @override
+  // void dispose() {
+  //   // Timer'ı iptal et
+  //   chartResetTimer.cancel();
+  //   super.dispose();
+  // }
 
   Future<void> _initializePorts() async {
     availablePorts = SerialPort.availablePorts;
     setState(() {
       if (!availablePorts.contains(selectedPort) || selectedPort == 'NONE') {
+        _disconnect();
         selectedPort = 'NONE';
         isPortConnected = false;
         isPumpOn = false;
-        //_updatePumpButton();
+        chartValues.clear();
+        lineChart = SimpleLineChart.withSampleData(chartValues);
       } else if (!isPortConnected) {
         _connect();
       }
@@ -78,7 +99,6 @@ class _HomePageState extends State<HomePage> {
         print("Default BAutRat ${config.baudRate}");
         print("Default Bits ${config.bits}");
         print("Default stopBits ${config.stopBits}");
-        print("Default BaudRate ${config.baudRate}");
 
         isPortConnected = true;
         //_updatePumpButton();
@@ -109,14 +129,17 @@ class _HomePageState extends State<HomePage> {
         if (read.isNotEmpty) {
           int flowrateValue = read.first;
           LinearFlowrate dataPoint = LinearFlowrate(timer.tick, flowrateValue);
-          lineChart.addDataPoint(dataPoint);
-
-          // Update the sensor flow rate text field
-          setState(() {
-            _sensorFlowRateController.text = flowrateValue.toString();
-          });
 
           setState(() {
+            // Yeni veriyi ekleyin
+            chartValues.add(dataPoint);
+
+            // Maksimum veri noktası sayısını aşan verileri kaldırın
+            if (chartValues.length > maxDataPoints) {
+              chartValues.removeAt(0);
+            }
+
+            // Yeniden çizin
             lineChart = SimpleLineChart.withSampleData(chartValues);
           });
         }
@@ -435,12 +458,10 @@ class SimpleLineChart extends StatelessWidget {
       {required this.animate, this.getTitle, this.key})
       : super(key: key);
 
-  factory SimpleLineChart.withSampleData(List<LinearFlowrate> data,
-      {String Function(int)? getTitle}) {
+  factory SimpleLineChart.withSampleData(List<LinearFlowrate> data) {
     return SimpleLineChart(
       _createSampleData(data),
       animate: true,
-      getTitle: getTitle,
     );
   }
 
@@ -452,12 +473,30 @@ class SimpleLineChart extends StatelessWidget {
       behaviors: [
         charts.SeriesLegend(),
       ],
-      domainAxis: charts.NumericAxisSpec(
-        // Eğer getTitle fonksiyonu varsa, kullan
-        tickProviderSpec: getTitle != null
-            ? const charts.BasicNumericTickProviderSpec(
-                desiredTickCount: 5, dataIsInWholeNumbers: true)
-            : null,
+      domainAxis: const charts.NumericAxisSpec(
+        tickProviderSpec: charts.BasicNumericTickProviderSpec(
+          desiredTickCount: 5,
+          dataIsInWholeNumbers: true,
+        ),
+        // Zaman formatı belirtmek için custom tick provider kullanın
+        renderSpec: charts.SmallTickRendererSpec(
+          labelStyle: charts.TextStyleSpec(
+            fontSize: 10, // Yazı boyutunu düzenle
+          ),
+          labelAnchor:
+              charts.TickLabelAnchor.centered, // Etiketin konumunu ayarla
+          labelRotation: 45, // Etiketin dönüşünü ayarla
+          labelJustification:
+              charts.TickLabelJustification.inside, // Etiketin konumunu ayarla
+          minimumPaddingBetweenLabelsPx: 5, // Etiketler arası minimum boşluk
+          tickLengthPx: 0, // Etiketin boyutu
+          lineStyle: charts.LineStyleSpec(
+            thickness: 0, // çizgi kalınlığı
+          ),
+          axisLineStyle: charts.LineStyleSpec(
+            thickness: 0, // eksene çizgi kalınlığı
+          ),
+        ),
       ),
       primaryMeasureAxis: const charts.NumericAxisSpec(
         tickProviderSpec:
