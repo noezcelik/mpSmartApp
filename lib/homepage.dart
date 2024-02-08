@@ -96,7 +96,7 @@ class _HomePageState extends State<HomePage> {
 
         serialPort.config = config;
 
-        print("Default BAutRat ${config.baudRate}");
+        print("Default BautRat ${config.baudRate}");
         print("Default Bits ${config.bits}");
         print("Default stopBits ${config.stopBits}");
 
