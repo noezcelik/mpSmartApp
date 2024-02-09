@@ -470,32 +470,19 @@ class SimpleLineChart extends StatelessWidget {
     return charts.LineChart(
       seriesList,
       animate: animate,
-      behaviors: [
-        charts.SeriesLegend(),
-      ],
+      behaviors: [charts.SeriesLegend()],
       domainAxis: const charts.NumericAxisSpec(
-        tickProviderSpec: charts.BasicNumericTickProviderSpec(
-          desiredTickCount: 5,
-          dataIsInWholeNumbers: true,
-        ),
-        // Zaman formatı belirtmek için custom tick provider kullanın
+        showAxisLine: false, // X eksenindeki çizgiyi gizler
+        tickProviderSpec:
+            charts.BasicNumericTickProviderSpec(desiredTickCount: 5),
         renderSpec: charts.SmallTickRendererSpec(
-          labelStyle: charts.TextStyleSpec(
-            fontSize: 10, // Yazı boyutunu düzenle
-          ),
-          labelAnchor:
-              charts.TickLabelAnchor.centered, // Etiketin konumunu ayarla
-          labelRotation: 45, // Etiketin dönüşünü ayarla
-          labelJustification:
-              charts.TickLabelJustification.inside, // Etiketin konumunu ayarla
-          minimumPaddingBetweenLabelsPx: 5, // Etiketler arası minimum boşluk
-          tickLengthPx: 0, // Etiketin boyutu
-          lineStyle: charts.LineStyleSpec(
-            thickness: 0, // çizgi kalınlığı
-          ),
-          axisLineStyle: charts.LineStyleSpec(
-            thickness: 0, // eksene çizgi kalınlığı
-          ),
+          labelStyle: charts.TextStyleSpec(fontSize: 13),
+          labelRotation: 45,
+          labelJustification: charts.TickLabelJustification.inside,
+          minimumPaddingBetweenLabelsPx: 7,
+          tickLengthPx: 0,
+          lineStyle: charts.LineStyleSpec(thickness: 0),
+          axisLineStyle: charts.LineStyleSpec(thickness: 0),
         ),
       ),
       primaryMeasureAxis: const charts.NumericAxisSpec(
