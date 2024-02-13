@@ -97,22 +97,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "1.18.0"
-  cr_flutter_libserialport:
-    dependency: "direct main"
-    description:
-      name: cr_flutter_libserialport
-      sha256: "6fea099697d376c475e12149792096d3243fd8fcca82ec6ebee79d230d18295d"
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0+3"
-  crlibserialport:
-    dependency: transitive
-    description:
-      name: crlibserialport
-      sha256: fcd31cd666a330fbb38f8029741b438d099171b37bad3d88a325c3aa43321fde
-      url: "https://pub.dev"
-    source: hosted
-    version: "0.3.0+2"
   cupertino_icons:
     dependency: "direct main"
     description:
@@ -166,6 +150,14 @@ packages:
     description: flutter
     source: sdk
     version: "0.0.0"
+  flutter_libserialport:
+    dependency: "direct main"
+    description:
+      name: flutter_libserialport
+      sha256: "34cc4909eaa5b1502b9e1ad5a7dc597542f009d9adfa37c9a86ae0fb0d3b13fa"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0"
   flutter_lints:
     dependency: "direct dev"
     description:
@@ -208,6 +200,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "0.17.0"
+  libserialport:
+    dependency: transitive
+    description:
+      name: libserialport
+      sha256: "392e1592def65282429832ec66fa25e9e163d3b37716b97691482e2406720727"
+      url: "https://pub.dev"
+    source: hosted
+    version: "0.3.0+1"
   lints:
     dependency: transitive
     description:

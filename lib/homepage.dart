@@ -3,9 +3,9 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:charts_flutter/flutter.dart' as charts;
-import 'package:cr_flutter_libserialport/cr_flutter_libserialport.dart';
+//import 'package:cr_flutter_libserialport/cr_flutter_libserialport.dart';
 import 'package:flutter/material.dart';
-//import 'package:flutter_libserialport/flutter_libserialport.dart';
+import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:tektest_2/layout/textfiled.dart';
 import 'package:tektest_2/layout/widgets.dart';
@@ -101,13 +101,12 @@ class _HomePageState extends State<HomePage> {
         print("Default stopBits ${config.stopBits}");
 
         isPortConnected = true;
-        //_updatePumpButton();
+
         print(selectedPort);
       } catch (error) {
         print("Fehler beim Verbinden mit dem Port: $error");
         _disconnect();
         isPortConnected = false;
-        //_updatePumpButton();
       }
     }
   }
@@ -139,11 +138,20 @@ class _HomePageState extends State<HomePage> {
               chartValues.removeAt(0);
             }
 
+            // Sensör akış hızını güncelleyin
+            _updateSensorFlowRate(flowrateValue);
+
             // Yeniden çizin
             lineChart = SimpleLineChart.withSampleData(chartValues);
           });
         }
       }
+    });
+  }
+
+  void _updateSensorFlowRate(int flowrateValue) {
+    setState(() {
+      _sensorFlowRateController.text = flowrateValue.toString();
     });
   }
 
