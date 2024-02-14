@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'dart:typed_data';
 
 import 'package:charts_flutter/flutter.dart' as charts;
+//import 'package:flutter_libserialport/flutter_libserialport.dart';
 //import 'package:cr_flutter_libserialport/cr_flutter_libserialport.dart';
+//import 'package:crlibserialport/crlibserialport.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter_libserialport/flutter_libserialport.dart';
 import 'package:hexcolor/hexcolor.dart';
+import 'package:libserialport/libserialport.dart';
 import 'package:tektest_2/layout/textfiled.dart';
 import 'package:tektest_2/layout/widgets.dart';
 
@@ -19,7 +21,7 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   List<LinearFlowrate> chartValues = [];
   late List<String> availablePorts;
   String selectedPort = 'NONE';
@@ -42,6 +44,7 @@ class _HomePageState extends State<HomePage> {
   void initState() {
     super.initState();
     _initializePorts();
+    WidgetsBinding.instance.addObserver(this);
 
     lineChart = SimpleLineChart.withSampleData(chartValues);
     // Timer'ı başlat
@@ -53,6 +56,21 @@ class _HomePageState extends State<HomePage> {
     //     lineChart = SimpleLineChart.withSampleData(chartValues);
     //   });
     // });
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.inactive) {
+      _disconnect();
+    }
   }
 
   // @override
@@ -101,59 +119,104 @@ class _HomePageState extends State<HomePage> {
         print("Default stopBits ${config.stopBits}");
 
         isPortConnected = true;
-
+        // _showPortConnectedDialog(context);
         print(selectedPort);
       } catch (error) {
         print("Fehler beim Verbinden mit dem Port: $error");
         _disconnect();
         isPortConnected = false;
+        isPumpOn = false;
       }
     }
   }
 
   void _onButtonPressed() {
     _sendCommand(!isPumpOn ? "r" : "p");
-
-    isPumpOn = !isPumpOn;
+    setState(() {
+      isPumpOn = !isPumpOn;
+    });
   }
 
+  //
   void _startTimer() {
     Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!isPortConnected) {
         timer.cancel();
       } else {
-        var read = serialPort.read(1);
+        var readData = serialPort.read(1024);
+        if (readData.isNotEmpty) {
+          String receivedData = utf8.decode(readData);
+          print("Received data: $receivedData");
 
-        print(read);
-        if (read.isNotEmpty) {
-          int flowrateValue = read.first;
-          LinearFlowrate dataPoint = LinearFlowrate(timer.tick, flowrateValue);
+          double flowrateValue = double.tryParse(receivedData) ?? 0.00;
+          int roundedFlowrateValue = flowrateValue.round();
 
           setState(() {
-            // Yeni veriyi ekleyin
-            chartValues.add(dataPoint);
+            // Yeni veriyi oluşturun
+            LinearFlowrate dataPoint = LinearFlowrate(
+              DateTime.now()
+                  .second, // Her saniye için yeni bir veri noktası oluşturun
+              roundedFlowrateValue, // Okunan akış hızını kullanın
+            );
+
+            // Veriyi grafiğe ekleyin
+            lineChart.addDataPoint(dataPoint);
 
             // Maksimum veri noktası sayısını aşan verileri kaldırın
-            if (chartValues.length > maxDataPoints) {
-              chartValues.removeAt(0);
+            if (lineChart.seriesList[0].data.length > maxDataPoints) {
+              lineChart.seriesList[0].data.removeAt(0);
             }
 
             // Sensör akış hızını güncelleyin
-            _updateSensorFlowRate(flowrateValue);
-
-            // Yeniden çizin
-            lineChart = SimpleLineChart.withSampleData(chartValues);
+            _sensorFlowRateController.text = flowrateValue.toString();
           });
         }
       }
     });
   }
 
-  void _updateSensorFlowRate(int flowrateValue) {
-    setState(() {
-      _sensorFlowRateController.text = flowrateValue.toString();
-    });
-  }
+  // Future<void> _showPortConnectedDialog(BuildContext context) async {
+  //   await showDialog(
+  //     context: context,
+  //     builder: (BuildContext context) {
+  //       return AlertDialog(
+  //         content: Stack(
+  //           clipBehavior: Clip.antiAlias,
+  //           children: <Widget>[
+  //             Positioned(
+  //               right: -40.0,
+  //               top: -40.0,
+  //               child: InkResponse(
+  //                 onTap: () {
+  //                   Navigator.of(context).pop();
+  //                 },
+  //                 child: const CircleAvatar(
+  //                   child: Icon(Icons.close),
+  //                   backgroundColor: Colors.green,
+  //                 ),
+  //               ),
+  //             ),
+  //             Form(
+  //               child: Column(
+  //                 mainAxisSize: MainAxisSize.min,
+  //                 children: <Widget>[
+  //                   Padding(
+  //                     padding: EdgeInsets.all(8.0),
+  //                     child: TextFormField(),
+  //                   ),
+  //                   Padding(
+  //                     padding: EdgeInsets.all(8.0),
+  //                     child: TextFormField(),
+  //                   ),
+  //                 ],
+  //               ),
+  //             ),
+  //           ],
+  //         ),
+  //       );
+  //     },
+  //   );
+  // }
 
   void _sendCommand(String command) {
     if (isPortConnected) {
@@ -201,9 +264,18 @@ class _HomePageState extends State<HomePage> {
 
   void _disconnect() {
     if (isPortConnected) {
-      serialPort.close();
-      isPortConnected = false;
-      isPumpOn = false;
+      if (isPumpOn) {
+        _onButtonPressed(); // Pompayı kapat
+      }
+      if (isPrimeOn) {
+        _primen(); // Prime'ı kapat
+      }
+      serialPort.close(); // Seri port bağlantısını kes
+      setState(() {
+        isPortConnected = false;
+        isPumpOn = false; // Pompa kapalı olarak işaretlenir
+        isPrimeOn = false; // Prime kapalı olarak işaretlenir
+      });
       print('disconnect');
     }
   }
@@ -301,12 +373,8 @@ class _HomePageState extends State<HomePage> {
                             const SizedBox(height: 10),
                             ElevatedButton(
                               onPressed:
-                                  isPortConnected && selectedPort != 'NONE'
-                                      ? () {
-                                          setState(() {
-                                            _onButtonPressed();
-                                          });
-                                        }
+                                  (isPortConnected && selectedPort != 'NONE')
+                                      ? _onButtonPressed
                                       : null,
                               style: ElevatedButton.styleFrom(
                                 disabledBackgroundColor: HexColor(bcon),
@@ -480,9 +548,8 @@ class SimpleLineChart extends StatelessWidget {
       animate: animate,
       behaviors: [charts.SeriesLegend()],
       domainAxis: const charts.NumericAxisSpec(
-        showAxisLine: false, // X eksenindeki çizgiyi gizler
         tickProviderSpec:
-            charts.BasicNumericTickProviderSpec(desiredTickCount: 5),
+            charts.BasicNumericTickProviderSpec(desiredTickCount: 7),
         renderSpec: charts.SmallTickRendererSpec(
           labelStyle: charts.TextStyleSpec(fontSize: 13),
           labelRotation: 45,
@@ -494,8 +561,9 @@ class SimpleLineChart extends StatelessWidget {
         ),
       ),
       primaryMeasureAxis: const charts.NumericAxisSpec(
-        tickProviderSpec:
-            charts.BasicNumericTickProviderSpec(desiredTickCount: 5),
+        // Veri aralığınıza uygun şekilde ayarlayın
+        viewport: charts.NumericExtents(
+            0, 1000), // Örnek değerler, veri aralığınıza göre güncelleyin
       ),
     );
   }
