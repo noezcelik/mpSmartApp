@@ -48,6 +48,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     setState(() {
       lineChart = SimpleLineChart.withSampleData(chartValues);
     });
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _startTimer();
+    });
   }
 
   @override
@@ -536,6 +539,7 @@ class SimpleLineChart extends StatelessWidget {
 
   void addDataPoint(LinearFlowrate dataPoint) {
     seriesList[0].data.add(dataPoint);
+    print('HHAllooo');
   }
 
   const SimpleLineChart(this.seriesList,
