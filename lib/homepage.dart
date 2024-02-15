@@ -1,12 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 
 import 'package:charts_flutter/flutter.dart' as charts;
 //import 'package:flutter_libserialport/flutter_libserialport.dart';
 //import 'package:cr_flutter_libserialport/cr_flutter_libserialport.dart';
 //import 'package:crlibserialport/crlibserialport.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:libserialport/libserialport.dart';
 import 'package:tektest_2/layout/textfiled.dart';
@@ -45,17 +45,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     super.initState();
     _initializePorts();
     WidgetsBinding.instance.addObserver(this);
-
-    lineChart = SimpleLineChart.withSampleData(chartValues);
-    // Timer'ı başlat
-    // chartResetTimer = Timer.periodic(const Duration(seconds: 21), (timer) {
-    //   setState(() {
-    //     // Grafik verilerini sıfırla
-    //     chartValues.clear();
-    //     // Yeniden çiz
-    //     lineChart = SimpleLineChart.withSampleData(chartValues);
-    //   });
-    // });
+    setState(() {
+      lineChart = SimpleLineChart.withSampleData(chartValues);
+    });
   }
 
   @override
@@ -72,13 +64,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _disconnect();
     }
   }
-
-  // @override
-  // void dispose() {
-  //   // Timer'ı iptal et
-  //   chartResetTimer.cancel();
-  //   super.dispose();
-  // }
 
   Future<void> _initializePorts() async {
     availablePorts = SerialPort.availablePorts;
@@ -101,7 +86,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       try {
         SerialPortConfig config = SerialPortConfig();
 
-        // Kontrol etmek için bu noktada config.baudRate değerini yazdırın
         print("Baud Rate Before Opening: ${config.baudRate}");
 
         serialPort = SerialPort(selectedPort);
@@ -137,28 +121,50 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     });
   }
 
-  //
   void _startTimer() {
-    Timer.periodic(const Duration(seconds: 1), (timer) {
+    Timer.periodic(const Duration(seconds: 3), (timer) {
       if (!isPortConnected) {
         timer.cancel();
       } else {
         var readData = serialPort.read(1024);
+
         if (readData.isNotEmpty) {
           String receivedData = utf8.decode(readData);
-          print("Received data: $receivedData");
 
-          double flowrateValue = double.tryParse(receivedData) ?? 0.00;
+          // Gelen veriyi temizleme
+          String cleanData =
+              receivedData.trim(); // Başındaki ve sonundaki boşlukları kaldırma
+
+          // Beklenen karakterler dışındaki tüm karakterleri kaldırma
+          cleanData = cleanData.replaceAll(RegExp(r'[^0-9\.]'), '');
+
+          // Birden fazla nokta varsa, sadece ilkini tutma
+          int dotIndex = cleanData.indexOf('.');
+          if (dotIndex != -1) {
+            cleanData = cleanData.substring(0, dotIndex + 3);
+          }
+
+          double flowrateValue;
+
+          try {
+            flowrateValue = double.parse(cleanData);
+          } catch (e) {
+            print(
+                "Hata: Temizlenmiş veri ondalık bir sayıya dönüştürülemedi. $e");
+            flowrateValue = 0.0;
+          }
+
           int roundedFlowrateValue = flowrateValue.round();
+          print('CleanData:$cleanData');
+
+          // Yeni veriyi oluşturun
+          DateTime now = DateTime.now();
+          LinearFlowrate dataPoint = LinearFlowrate(
+            now.hour * 3600 + now.minute * 60 + now.second,
+            roundedFlowrateValue,
+          );
 
           setState(() {
-            // Yeni veriyi oluşturun
-            LinearFlowrate dataPoint = LinearFlowrate(
-              DateTime.now()
-                  .second, // Her saniye için yeni bir veri noktası oluşturun
-              roundedFlowrateValue, // Okunan akış hızını kullanın
-            );
-
             // Veriyi grafiğe ekleyin
             lineChart.addDataPoint(dataPoint);
 
@@ -169,6 +175,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
             // Sensör akış hızını güncelleyin
             _sensorFlowRateController.text = flowrateValue.toString();
+            print('flowrateValue: $flowrateValue');
           });
         }
       }
@@ -274,7 +281,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       setState(() {
         isPortConnected = false;
         isPumpOn = false; // Pompa kapalı olarak işaretlenir
-        isPrimeOn = false; // Prime kapalı olarak işaretlenir
+        isPrimeOn = false;
+        selectedPort = 'NONE'; // Prime kapalı olarak işaretlenir
       });
       print('disconnect');
     }
@@ -549,7 +557,7 @@ class SimpleLineChart extends StatelessWidget {
       behaviors: [charts.SeriesLegend()],
       domainAxis: const charts.NumericAxisSpec(
         tickProviderSpec:
-            charts.BasicNumericTickProviderSpec(desiredTickCount: 7),
+            charts.BasicNumericTickProviderSpec(desiredTickCount: 9),
         renderSpec: charts.SmallTickRendererSpec(
           labelStyle: charts.TextStyleSpec(fontSize: 13),
           labelRotation: 45,
