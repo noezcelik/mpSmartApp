@@ -44,13 +44,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     _initializePorts();
-    WidgetsBinding.instance.addObserver(this);
     setState(() {
       lineChart = SimpleLineChart.withSampleData(chartValues);
     });
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _startTimer();
-    });
+    WidgetsBinding.instance.addObserver(this);
+    // WidgetsBinding.instance.addPostFrameCallback((_) {
+    //   _startTimer();
+    // });
   }
 
   @override
@@ -129,14 +129,18 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       if (!isPortConnected) {
         timer.cancel();
       } else {
-        var readData = serialPort.read(1024);
+        List<int> buffer = [];
 
-        if (readData.isNotEmpty) {
-          String receivedData = utf8.decode(readData);
+        var readData = serialPort.read(1024);
+        buffer.addAll(readData);
+
+        print('ReadData: $readData');
+
+        if (buffer.isNotEmpty) {
+          String receivedData = utf8.decode(buffer);
 
           // Gelen veriyi temizleme
-          String cleanData =
-              receivedData.trim(); // Başındaki ve sonundaki boşlukları kaldırma
+          String cleanData = receivedData.trim();
 
           // Beklenen karakterler dışındaki tüm karakterleri kaldırma
           cleanData = cleanData.replaceAll(RegExp(r'[^0-9\.]'), '');
@@ -534,22 +538,19 @@ class SimpleLineChart extends StatelessWidget {
   final List<charts.Series<LinearFlowrate, int>> seriesList;
   final bool animate;
   final String Function(int)? getTitle;
-  @override
-  final Key? key;
 
   void addDataPoint(LinearFlowrate dataPoint) {
     seriesList[0].data.add(dataPoint);
-    print('HHAllooo');
   }
 
-  const SimpleLineChart(this.seriesList,
-      {required this.animate, this.getTitle, this.key})
-      : super(key: key);
+  SimpleLineChart(this.seriesList, {required this.animate, this.getTitle});
 
-  factory SimpleLineChart.withSampleData(List<LinearFlowrate> data) {
+  factory SimpleLineChart.withSampleData(List<LinearFlowrate> data,
+      {String Function(int)? getTitle}) {
     return SimpleLineChart(
       _createSampleData(data),
       animate: true,
+      getTitle: getTitle,
     );
   }
 
@@ -558,24 +559,19 @@ class SimpleLineChart extends StatelessWidget {
     return charts.LineChart(
       seriesList,
       animate: animate,
-      behaviors: [charts.SeriesLegend()],
-      domainAxis: const charts.NumericAxisSpec(
-        tickProviderSpec:
-            charts.BasicNumericTickProviderSpec(desiredTickCount: 9),
-        renderSpec: charts.SmallTickRendererSpec(
-          labelStyle: charts.TextStyleSpec(fontSize: 13),
-          labelRotation: 45,
-          labelJustification: charts.TickLabelJustification.inside,
-          minimumPaddingBetweenLabelsPx: 7,
-          tickLengthPx: 0,
-          lineStyle: charts.LineStyleSpec(thickness: 0),
-          axisLineStyle: charts.LineStyleSpec(thickness: 0),
-        ),
+      behaviors: [
+        charts.SeriesLegend(),
+      ],
+      domainAxis: charts.NumericAxisSpec(
+        // Eğer getTitle fonksiyonu varsa, kullan
+        tickProviderSpec: getTitle != null
+            ? const charts.BasicNumericTickProviderSpec(
+                desiredTickCount: 5, dataIsInWholeNumbers: true)
+            : null,
       ),
       primaryMeasureAxis: const charts.NumericAxisSpec(
-        // Veri aralığınıza uygun şekilde ayarlayın
-        viewport: charts.NumericExtents(
-            0, 1000), // Örnek değerler, veri aralığınıza göre güncelleyin
+        tickProviderSpec:
+            charts.BasicNumericTickProviderSpec(desiredTickCount: 5),
       ),
     );
   }
