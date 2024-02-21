@@ -9,7 +9,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:hexcolor/hexcolor.dart';
 import 'package:libserialport/libserialport.dart';
-import 'package:tektest_2/layout/textfiled.dart';
 import 'package:tektest_2/layout/widgets.dart';
 
 import 'constants/color.dart';
@@ -32,13 +31,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   static const maxDataPoints = 7;
 
-  //final SerialPort _serialPort = SerialPort("/dev/ttyUSB0");
   final TextEditingController _sensorFlowRateController =
       TextEditingController();
 
+  final TextEditingController _targetController = TextEditingController();
+
   late SimpleLineChart lineChart;
-  //late Timer chartResetTimer;
-  //final port = SerialPort('COM5');
 
   @override
   void initState() {
@@ -48,9 +46,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       lineChart = SimpleLineChart.withSampleData(chartValues);
     });
     WidgetsBinding.instance.addObserver(this);
-    // WidgetsBinding.instance.addPostFrameCallback((_) {
-    //   _startTimer();
-    // });
   }
 
   @override
@@ -101,12 +96,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
         serialPort.config = config;
 
-        print("Default BautRat ${config.baudRate}");
-        print("Default Bits ${config.bits}");
-        print("Default stopBits ${config.stopBits}");
+        // print("Default BautRat ${config.baudRate}");
+        // print("Default Bits ${config.bits}");
+        // print("Default stopBits ${config.stopBits}");
 
         isPortConnected = true;
-        // _showPortConnectedDialog(context);
         print(selectedPort);
       } catch (error) {
         print("Fehler beim Verbinden mit dem Port: $error");
@@ -125,7 +119,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   void _startTimer() {
-    Timer.periodic(const Duration(seconds: 3), (timer) {
+    Timer.periodic(const Duration(seconds: 1), (timer) {
       if (!isPortConnected) {
         timer.cancel();
       } else {
@@ -134,7 +128,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         var readData = serialPort.read(1024);
         buffer.addAll(readData);
 
-        print('ReadData: $readData');
+        //print('ReadData: $readData');
 
         if (buffer.isNotEmpty) {
           String receivedData = utf8.decode(buffer);
@@ -142,10 +136,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           // Gelen veriyi temizleme
           String cleanData = receivedData.trim();
 
-          // Beklenen karakterler dışındaki tüm karakterleri kaldırma
           cleanData = cleanData.replaceAll(RegExp(r'[^0-9\.]'), '');
 
-          // Birden fazla nokta varsa, sadece ilkini tutma
           int dotIndex = cleanData.indexOf('.');
           if (dotIndex != -1) {
             cleanData = cleanData.substring(0, dotIndex + 3);
@@ -162,75 +154,29 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           }
 
           int roundedFlowrateValue = flowrateValue.round();
-          print('CleanData:$cleanData');
+          //print('CleanData:$cleanData');
 
-          // Yeni veriyi oluşturun
-          DateTime now = DateTime.now();
-          LinearFlowrate dataPoint = LinearFlowrate(
-            now.hour * 3600 + now.minute * 60 + now.second,
-            roundedFlowrateValue,
-          );
-
+          LinearFlowrate dataPoint =
+              LinearFlowrate(timer.tick, roundedFlowrateValue, DateTime.now());
           setState(() {
-            // Veriyi grafiğe ekleyin
-            lineChart.addDataPoint(dataPoint);
+            chartValues.add(dataPoint);
 
-            // Maksimum veri noktası sayısını aşan verileri kaldırın
-            if (lineChart.seriesList[0].data.length > maxDataPoints) {
-              lineChart.seriesList[0].data.removeAt(0);
+            if (chartValues.length > maxDataPoints) {
+              chartValues.removeAt(0);
+            }
+            for (var i = 0; i < chartValues.length; i++) {
+              chartValues[i].index = i;
             }
 
-            // Sensör akış hızını güncelleyin
+            lineChart = SimpleLineChart.withSampleData(chartValues);
+
             _sensorFlowRateController.text = flowrateValue.toString();
-            print('flowrateValue: $flowrateValue');
+            //print('flowrateValue: $flowrateValue');
           });
         }
       }
     });
   }
-
-  // Future<void> _showPortConnectedDialog(BuildContext context) async {
-  //   await showDialog(
-  //     context: context,
-  //     builder: (BuildContext context) {
-  //       return AlertDialog(
-  //         content: Stack(
-  //           clipBehavior: Clip.antiAlias,
-  //           children: <Widget>[
-  //             Positioned(
-  //               right: -40.0,
-  //               top: -40.0,
-  //               child: InkResponse(
-  //                 onTap: () {
-  //                   Navigator.of(context).pop();
-  //                 },
-  //                 child: const CircleAvatar(
-  //                   child: Icon(Icons.close),
-  //                   backgroundColor: Colors.green,
-  //                 ),
-  //               ),
-  //             ),
-  //             Form(
-  //               child: Column(
-  //                 mainAxisSize: MainAxisSize.min,
-  //                 children: <Widget>[
-  //                   Padding(
-  //                     padding: EdgeInsets.all(8.0),
-  //                     child: TextFormField(),
-  //                   ),
-  //                   Padding(
-  //                     padding: EdgeInsets.all(8.0),
-  //                     child: TextFormField(),
-  //                   ),
-  //                 ],
-  //               ),
-  //             ),
-  //           ],
-  //         ),
-  //       );
-  //     },
-  //   );
-  // }
 
   void _sendCommand(String command) {
     if (isPortConnected) {
@@ -254,23 +200,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> setFlowRate() async {
     try {
-      if (_sensorFlowRateController.text.isNotEmpty) {
-        final int flowRate = int.parse(_sensorFlowRateController.text);
-        final Uint8List command = Uint8List.fromList([115, flowRate]);
-        serialPort.write(command);
-        print("Command sent: $command");
+      print(_targetController.text);
 
-        print(
-            "Before Update: _sensorFlowRateController.text = ${_sensorFlowRateController.text}");
+      final int flowRate = int.parse(_targetController.text);
+      print('fl$flowRate');
 
-        // Update on the main thread
-        setState(() {
-          _sensorFlowRateController.text = flowRate.toString();
-        });
+      final Uint8List command = Uint8List.fromList([115, flowRate]);
+      serialPort.write(command);
+      print("Command sent: $command");
 
-        print(
-            "After Update: _sensorFlowRateController.text = ${_sensorFlowRateController.text}");
-      }
+      print("Before Update: TargetController.text = ${_targetController.text}");
+
+      // Update on the main thread
+      setState(() {
+        _targetController.text = flowRate.toString();
+      });
+
+      print("After Update TargetController.text = ${_targetController.text}");
     } catch (e) {
       print("Error sending command: $e");
     }
@@ -356,7 +302,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                   height: 29,
                                   color: isPortConnected
                                       ? HexColor(hellgruen)
-                                      : HexColor(bcon),
+                                      : Colors.white,
                                   child: DropdownButton<String>(
                                     value: selectedPort,
                                     onChanged: (String? newValue) {
@@ -392,10 +338,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       ? _onButtonPressed
                                       : null,
                               style: ElevatedButton.styleFrom(
-                                disabledBackgroundColor: HexColor(bcon),
+                                disabledBackgroundColor: Colors.white,
                                 backgroundColor: isPumpOn
                                     ? HexColor(hellgruen)
-                                    : HexColor(bcon),
+                                    : Colors.white,
                                 minimumSize: const Size(120, 40),
                               ),
                               child: Text(
@@ -420,9 +366,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               }
                             : null,
                         style: ElevatedButton.styleFrom(
-                          disabledBackgroundColor: HexColor(bcon),
+                          disabledBackgroundColor: Colors.white,
                           backgroundColor:
-                              isPrimeOn ? HexColor(hellgruen) : HexColor(bcon),
+                              isPrimeOn ? HexColor(hellgruen) : Colors.white,
                           minimumSize: const Size(120, 40),
                         ),
                         child: Text(
@@ -434,8 +380,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         padding: const EdgeInsets.fromLTRB(10, 10, 10, 0),
                         child: ElevatedButton(
                           style: ElevatedButton.styleFrom(
-                            disabledBackgroundColor: HexColor(bcon),
-                            backgroundColor: HexColor(bcon),
+                            disabledBackgroundColor: Colors.white,
+                            backgroundColor: Colors.white,
                             minimumSize: const Size(100, 40),
                           ),
                           onPressed: isPortConnected
@@ -462,8 +408,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                         Row(
                           children: [
-                            const ObscuredTextFieldSample(),
-                            Text('µl/min', style: butonTextStyle(fontSize: 10)),
+                            SizedBox(
+                              width: 90,
+                              height: 29,
+                              child: Container(
+                                alignment: Alignment.center,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(
+                                      20.0), // Köşeleri yuvarlatır
+                                  border: Border.all(
+                                      color: Colors
+                                          .transparent), // Çerçeveyi kaldırır
+                                  color: Colors.white,
+                                ),
+                                child: TextField(
+                                  controller: _targetController,
+                                  decoration: const InputDecoration(
+                                    border: InputBorder
+                                        .none, // Alt çizgiyi kaldırır
+                                    contentPadding: EdgeInsets.symmetric(
+                                      vertical: 15,
+                                      horizontal: 17,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.only(left: 5),
+                              child: Text('µl/min',
+                                  style: butonTextStyle(fontSize: 10)),
+                            ),
                           ],
                         ),
                       ],
@@ -484,7 +459,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         Row(
                           children: [
                             SizedBox(
-                              width: 75,
+                              width: 90,
                               height: 30,
                               child: TextField(
                                 controller: _sensorFlowRateController,
@@ -495,7 +470,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                                       borderRadius: BorderRadius.circular(20.0),
                                     ),
                                     filled: true,
-                                    fillColor: HexColor(bcon),
+                                    fillColor: Colors.white,
                                     contentPadding: const EdgeInsets.symmetric(
                                         vertical: 7, horizontal: 25)),
                               ),
@@ -537,41 +512,47 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 class SimpleLineChart extends StatelessWidget {
   final List<charts.Series<LinearFlowrate, int>> seriesList;
   final bool animate;
-  final String Function(int)? getTitle;
 
-  void addDataPoint(LinearFlowrate dataPoint) {
-    seriesList[0].data.add(dataPoint);
-  }
+  const SimpleLineChart(this.seriesList, {required this.animate});
 
-  SimpleLineChart(this.seriesList, {required this.animate, this.getTitle});
-
-  factory SimpleLineChart.withSampleData(List<LinearFlowrate> data,
-      {String Function(int)? getTitle}) {
+  factory SimpleLineChart.withSampleData(List<LinearFlowrate> data) {
     return SimpleLineChart(
       _createSampleData(data),
       animate: true,
-      getTitle: getTitle,
     );
   }
+
+  // void addDataPoint(LinearFlowrate dataPoint) {
+  //   // Veri noktasını veri listesine ekleyin
+  //   seriesList[0].data.add(dataPoint);
+  // }
 
   @override
   Widget build(BuildContext context) {
     return charts.LineChart(
       seriesList,
       animate: animate,
+      animationDuration: const Duration(milliseconds: 900),
       behaviors: [
         charts.SeriesLegend(),
       ],
-      domainAxis: charts.NumericAxisSpec(
-        // Eğer getTitle fonksiyonu varsa, kullan
-        tickProviderSpec: getTitle != null
-            ? const charts.BasicNumericTickProviderSpec(
-                desiredTickCount: 5, dataIsInWholeNumbers: true)
-            : null,
+      domainAxis: const charts.NumericAxisSpec(
+        showAxisLine: false,
+        tickProviderSpec:
+            charts.BasicNumericTickProviderSpec(desiredTickCount: 7),
+        renderSpec: charts.SmallTickRendererSpec(
+          labelStyle: charts.TextStyleSpec(fontSize: 13),
+          labelRotation: 45,
+          labelJustification: charts.TickLabelJustification.inside,
+          minimumPaddingBetweenLabelsPx: 7,
+          tickLengthPx: 0,
+          lineStyle: charts.LineStyleSpec(thickness: 0),
+          axisLineStyle: charts.LineStyleSpec(thickness: 0),
+        ),
       ),
       primaryMeasureAxis: const charts.NumericAxisSpec(
         tickProviderSpec:
-            charts.BasicNumericTickProviderSpec(desiredTickCount: 5),
+            charts.BasicNumericTickProviderSpec(desiredTickCount: 7),
       ),
     );
   }
@@ -582,7 +563,7 @@ class SimpleLineChart extends StatelessWidget {
       charts.Series<LinearFlowrate, int>(
         id: 'Flowrate',
         colorFn: (_, __) => charts.MaterialPalette.blue.shadeDefault,
-        domainFn: (LinearFlowrate flowrate, _) => flowrate.second,
+        domainFn: (LinearFlowrate flowrate, _) => flowrate.index,
         measureFn: (LinearFlowrate flowrate, _) => flowrate.eorflowrate,
         data: data,
       )
@@ -591,18 +572,17 @@ class SimpleLineChart extends StatelessWidget {
 }
 
 class LinearFlowrate {
-  final int second;
+  int index;
   final int eorflowrate;
-  final String time;
+  final DateTime dateTime;
 
-  LinearFlowrate(this.second, this.eorflowrate) : time = _formatTime(second);
+  LinearFlowrate(this.index, this.eorflowrate, this.dateTime);
 
-  static String _formatTime(int seconds) {
-    int minutes = seconds ~/ 60;
-    seconds %= 60;
-    int hours = minutes ~/ 60;
-    minutes %= 60;
-    return '${_formatTwoDigit(hours)}:${_formatTwoDigit(minutes)}:${_formatTwoDigit(seconds)}';
+  static String formatTimeStamp(int seconds) {
+    final int hours = seconds ~/ 3600;
+    final int minutes = (seconds % 3600) ~/ 60;
+    final int remainingSeconds = seconds % 60;
+    return '${_formatTwoDigit(hours)}:${_formatTwoDigit(minutes)}:${_formatTwoDigit(remainingSeconds)}';
   }
 
   static String _formatTwoDigit(int number) {

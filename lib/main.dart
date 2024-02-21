@@ -9,7 +9,7 @@ import 'package:tektest_2/homepage.dart';
 void main() {
   runApp(const MyApp());
   doWhenWindowReady(() {
-    appWindow.size = const Size(550, 700);
+    appWindow.size = const Size(600, 750);
     Size initialSize = appWindow.size;
     appWindow.size = initialSize;
     appWindow.minSize = initialSize;
