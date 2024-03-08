@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:charts_flutter/flutter.dart' as charts;
 //import 'package:flutter_libserialport/flutter_libserialport.dart';
@@ -96,7 +97,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
         serialPort.config = config;
 
-        // print("Default BautRat ${config.baudRate}");
+        print("Default BautRat ${config.baudRate}");
         // print("Default Bits ${config.bits}");
         // print("Default stopBits ${config.stopBits}");
 
@@ -124,54 +125,37 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
         timer.cancel();
       } else {
         List<int> buffer = [];
-
         var readData = serialPort.read(1024);
         buffer.addAll(readData);
 
-        //print('ReadData: $readData');
-
         if (buffer.isNotEmpty) {
           String receivedData = utf8.decode(buffer);
-
-          // Gelen veriyi temizleme
           String cleanData = receivedData.trim();
-
           cleanData = cleanData.replaceAll(RegExp(r'[^0-9\.]'), '');
-
           int dotIndex = cleanData.indexOf('.');
           if (dotIndex != -1) {
             cleanData = cleanData.substring(0, dotIndex + 3);
           }
-
           double flowrateValue;
-
           try {
             flowrateValue = double.parse(cleanData);
           } catch (e) {
-            print(
-                "Hata: Temizlenmiş veri ondalık bir sayıya dönüştürülemedi. $e");
+            print(" $e");
             flowrateValue = 0.0;
           }
-
           int roundedFlowrateValue = flowrateValue.round();
-          //print('CleanData:$cleanData');
-
           LinearFlowrate dataPoint =
               LinearFlowrate(timer.tick, roundedFlowrateValue, DateTime.now());
           setState(() {
             chartValues.add(dataPoint);
-
             if (chartValues.length > maxDataPoints) {
               chartValues.removeAt(0);
             }
             for (var i = 0; i < chartValues.length; i++) {
               chartValues[i].index = i;
             }
-
             lineChart = SimpleLineChart.withSampleData(chartValues);
-
             _sensorFlowRateController.text = flowrateValue.toString();
-            //print('flowrateValue: $flowrateValue');
           });
         }
       }
@@ -199,14 +183,21 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> setFlowRate() async {
+    if (!isPumpOn && !isPrimeOn) {
+      return;
+    }
+
     try {
       print(_targetController.text);
 
       final int flowRate = int.parse(_targetController.text);
       print('fl$flowRate');
 
-      final Uint8List command = Uint8List.fromList([115, flowRate]);
-      serialPort.write(command);
+      final Uint16List command = Uint16List.fromList([115, flowRate]);
+      final Uint8List byteData =
+          Uint8List.fromList(command.buffer.asUint8List());
+      serialPort.write(byteData);
+
       print("Command sent: $command");
 
       print("Before Update: TargetController.text = ${_targetController.text}");
@@ -225,17 +216,17 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   void _disconnect() {
     if (isPortConnected) {
       if (isPumpOn) {
-        _onButtonPressed(); // Pompayı kapat
+        _onButtonPressed();
       }
       if (isPrimeOn) {
-        _primen(); // Prime'ı kapat
+        _primen();
       }
-      serialPort.close(); // Seri port bağlantısını kes
+      serialPort.close();
       setState(() {
         isPortConnected = false;
-        isPumpOn = false; // Pompa kapalı olarak işaretlenir
+        isPumpOn = false;
         isPrimeOn = false;
-        selectedPort = 'NONE'; // Prime kapalı olarak işaretlenir
+        selectedPort = 'NONE';
       });
       print('disconnect');
     }
@@ -414,18 +405,14 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               child: Container(
                                 alignment: Alignment.center,
                                 decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(
-                                      20.0), // Köşeleri yuvarlatır
-                                  border: Border.all(
-                                      color: Colors
-                                          .transparent), // Çerçeveyi kaldırır
+                                  borderRadius: BorderRadius.circular(20.0),
+                                  border: Border.all(color: Colors.transparent),
                                   color: Colors.white,
                                 ),
                                 child: TextField(
                                   controller: _targetController,
                                   decoration: const InputDecoration(
-                                    border: InputBorder
-                                        .none, // Alt çizgiyi kaldırır
+                                    border: InputBorder.none,
                                     contentPadding: EdgeInsets.symmetric(
                                       vertical: 15,
                                       horizontal: 17,
@@ -521,11 +508,6 @@ class SimpleLineChart extends StatelessWidget {
       animate: true,
     );
   }
-
-  // void addDataPoint(LinearFlowrate dataPoint) {
-  //   // Veri noktasını veri listesine ekleyin
-  //   seriesList[0].data.add(dataPoint);
-  // }
 
   @override
   Widget build(BuildContext context) {
